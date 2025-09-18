@@ -29,6 +29,13 @@
 #include "stdint.h"
 #include "rtos.h"
 
+/* ---------------------------------------------------
+ * Definição de modos de escalonamento
+ * Ative apenas UM dos modos por vez
+ * --------------------------------------------------- */
+#define MODO_COOPERATIVO   1
+#define MODO_PREEMPTIVO    0
+
 /*
  * Prototipos das tarefas
  */
@@ -40,6 +47,7 @@ void tarefa_5(void);
 void tarefa_6(void);
 void tarefa_7(void);
 void tarefa_8(void);
+void tarefa_extra(void);   /* <<< Prototipo da tarefa extra */
 
 /*
  * Configuracao dos tamanhos das pilhas
@@ -52,6 +60,7 @@ void tarefa_8(void);
 #define TAM_PILHA_6			(TAM_MINIMO_PILHA + 24)
 #define TAM_PILHA_7			(TAM_MINIMO_PILHA + 24)
 #define TAM_PILHA_8			(TAM_MINIMO_PILHA + 24)
+#define TAM_PILHA_EXTRA		(TAM_MINIMO_PILHA + 24)   /* <<< Tarefa extra */
 #define TAM_PILHA_OCIOSA	(TAM_MINIMO_PILHA + 24)
 
 /*
@@ -65,6 +74,7 @@ uint32_t PILHA_TAREFA_5[TAM_PILHA_5];
 uint32_t PILHA_TAREFA_6[TAM_PILHA_6];
 uint32_t PILHA_TAREFA_7[TAM_PILHA_7];
 uint32_t PILHA_TAREFA_8[TAM_PILHA_8];
+uint32_t PILHA_TAREFA_EXTRA[TAM_PILHA_EXTRA];   /* <<< Pilha da tarefa extra */
 uint32_t PILHA_TAREFA_OCIOSA[TAM_PILHA_OCIOSA];
 
 /*
@@ -72,32 +82,32 @@ uint32_t PILHA_TAREFA_OCIOSA[TAM_PILHA_OCIOSA];
  */
 int main(void)
 {
-    
 #if 0
 	system_init();
 #endif
 	
 	/* Criacao das tarefas */
-	/* Parametros: ponteiro, nome, ponteiro da pilha, tamanho da pilha, prioridade da tarefa */
-    
 	CriaTarefa(tarefa_1, "Tarefa 1", PILHA_TAREFA_1, TAM_PILHA_1, 2);
-	
 	CriaTarefa(tarefa_2, "Tarefa 2", PILHA_TAREFA_2, TAM_PILHA_2, 1);
-	
+	CriaTarefa(tarefa_extra, "Tarefa Extra", PILHA_TAREFA_EXTRA, TAM_PILHA_EXTRA, 3);
+
 	/* Cria tarefa ociosa do sistema */
 	CriaTarefa(tarefa_ociosa,"Tarefa ociosa", PILHA_TAREFA_OCIOSA, TAM_PILHA_OCIOSA, 0);
 	
-	/* Configura marca de tempo */
+	/* Configura marca de tempo (necessário para preemptivo) */
+#if MODO_PREEMPTIVO
 	ConfiguraMarcaTempo();   
+#endif	
 	
 	/* Inicia sistema multitarefas */
 	IniciaMultitarefas();
 	
-	/* Nunca chega aqui */
-	while (1)
-	{
-	}
+	while (1) {}
 }
+
+/* --------------------------------------------------- */
+/*  TAREFAS EXISTENTES (1 ATÉ 8) — SEM ALTERAÇÕES      */
+/* --------------------------------------------------- */
 
 /* Tarefas de exemplo que usam funcoes para suspender/continuar as tarefas */
 void tarefa_1(void)
@@ -108,7 +118,6 @@ void tarefa_1(void)
 		a++;
 		port_pin_set_output_level(LED_0_PIN, LED_0_ACTIVE); /* Liga LED. */
 		TarefaContinua(2);
-	
 	}
 }
 
@@ -119,25 +128,22 @@ void tarefa_2(void)
 	{
 		b++;
 		TarefaSuspende(2);	
-		port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE); 	/* Turn LED off. */
+		port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE); 	/* Desliga LED. */
 	}
 }
 
-/* Tarefas de exemplo que usam funcoes para suspender as tarefas por algum tempo (atraso/delay) */
+/* Tarefas de exemplo que usam funcoes de atraso */
 void tarefa_3(void)
 {
 	volatile uint16_t a = 0;
 	for(;;)
 	{
 		a++;	
-			
-		/* Liga LED. */
 		port_pin_set_output_level(LED_0_PIN, LED_0_ACTIVE);
-		TarefaEspera(1000); 	/* tarefa 1 se coloca em espera por 3 marcas de tempo (ticks) */
+		TarefaEspera(1000); 	/* espera 1000 ms */
 		
-		/* Desliga LED. */
 		port_pin_set_output_level(LED_0_PIN, !LED_0_ACTIVE);
-		TarefaEspera(1000); 	/* tarefa 1 se coloca em espera por 3 marcas de tempo (ticks) */
+		TarefaEspera(1000); 	
 	}
 }
 
@@ -147,76 +153,56 @@ void tarefa_4(void)
 	for(;;)
 	{
 		b++;
-		TarefaEspera(5);	/* tarefa se coloca em espera por 5 marcas de tempo (ticks) */
+		TarefaEspera(5);	
 	}
 }
 
 /* Tarefas de exemplo que usam funcoes de semaforo */
-
-semaforo_t SemaforoTeste = {0,0}; /* declaracao e inicializacao de um semaforo */
+semaforo_t SemaforoTeste = {0,0}; 
 
 void tarefa_5(void)
 {
-
-	uint32_t a = 0;			/* inicializacoes para a tarefa */
-	
+	uint32_t a = 0;			
 	for(;;)
 	{
-		
-		a++;				/* codigo exemplo da tarefa */
-
-		TarefaEspera(3); 	/* tarefa se coloca em espera por 3 marcas de tempo (ticks) */
-		
-		SemaforoLibera(&SemaforoTeste); /* tarefa libera semaforo para tarefa que esta esperando-o */
-		
+		a++;				
+		TarefaEspera(3); 	
+		SemaforoLibera(&SemaforoTeste); 
 	}
 }
 
-/* Exemplo de tarefa que usa semaforo */
 void tarefa_6(void)
 {
-	
-	uint32_t b = 0;	    /* inicializacoes para a tarefa */
-	
+	uint32_t b = 0;	    
 	for(;;)
 	{
-		
-		b++; 			/* codigo exemplo da tarefa */
-		
-		SemaforoAguarda(&SemaforoTeste); /* tarefa se coloca em espera por semaforo */
-
+		b++; 			
+		SemaforoAguarda(&SemaforoTeste); 
 	}
 }
 
 /* solucao com buffer compartihado */
-/* Tarefas de exemplo que usam funcoes de semaforo */
-
 #define TAM_BUFFER 10
-uint8_t buffer[TAM_BUFFER]; /* declaracao de um buffer (vetor) ou fila circular */
+uint8_t buffer[TAM_BUFFER]; 
 
-semaforo_t SemaforoCheio = {0,0}; /* declaracao e inicializacao de um semaforo */
-semaforo_t SemaforoVazio = {TAM_BUFFER,0}; /* declaracao e inicializacao de um semaforo */
+semaforo_t SemaforoCheio = {0,0}; 
+semaforo_t SemaforoVazio = {TAM_BUFFER,0}; 
 
 void tarefa_7(void)
 {
-
-	uint8_t a = 1;			/* inicializacoes para a tarefa */
+	uint8_t a = 1;			
 	uint8_t i = 0;
 	
 	for(;;)
 	{
 		SemaforoAguarda(&SemaforoVazio);
-		
 		buffer[i] = a++;
 		i = (i+1)%TAM_BUFFER;
-		
-		SemaforoLibera(&SemaforoCheio); /* tarefa libera semaforo para tarefa que esta esperando-o */
-		
-		TarefaEspera(10); 	/* tarefa se coloca em espera por 10 marcas de tempo (ticks), equivale a 10ms */		
+		SemaforoLibera(&SemaforoCheio); 
+		TarefaEspera(10); 			
 	}
 }
 
-/* Exemplo de tarefa que usa semaforo */
 void tarefa_8(void)
 {
 	static uint8_t f = 0;
@@ -239,10 +225,36 @@ void tarefa_8(void)
 		} while (!contador);
 		
 		SemaforoAguarda(&SemaforoCheio);
-		
 		valor = buffer[f];
 		f = (f+1) % TAM_BUFFER;		
-		
 		SemaforoLibera(&SemaforoVazio);
 	}
 }
+
+/* --------------------------------------------------- */
+/*  >>> NOVA TAREFA EXTRA (executa a cada 100 ms)      */
+/* --------------------------------------------------- */
+void tarefa_extra(void)
+{
+	for(;;)
+	{
+		port_pin_toggle_output_level(LED_0_PIN); /* Pisca LED */
+		TarefaEspera(100);  /* Espera 100 ms */
+	}
+}
+
+/* --------------------------------------------------
+ * - No MODO COOPERATIVO, a troca de tarefas só ocorre
+ *   quando uma tarefa chama TarefaEspera(), TarefaSuspende()
+ *   ou libera recursos voluntariamente.
+ *
+ * - No MODO PREEMPTIVO, o escalonador força a troca
+ *   de tarefas a cada tick (ConfiguraMarcaTempo()),
+ *   mesmo que a tarefa não tenha chamado funções de yield.
+ *
+ * - Ao observar a tarefa_extra (piscar LED a cada 100 ms):
+ *   -> Em cooperativo, ela só roda se as outras tarefas
+ *      liberarem a CPU voluntariamente.
+ *   -> Em preemptivo, ela roda com precisão periódica,
+ *      mesmo que outras tarefas estejam ocupadas.
+ * --------------------------------------------------- */
